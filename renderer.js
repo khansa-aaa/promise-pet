@@ -46,8 +46,8 @@ const AUTO_HIDE_MS = 14 * 1000;
 const SCHED_MAX_W = 980; // the schedule view grows up to this, limited by the space left of the pet
 const SCHED_MAX_H = 640;
 
-let state = { date: '', today: [], carryCount: 0, tasks: [], schedule: [] };
-let tab = 'today'; // 'today' | 'tasks' | 'schedule'
+let state = { date: '', today: [], carryCount: 0, tasks: [], schedule: [], cards: [], ai: { provider: 'claude' } };
+let tab = 'today'; // 'today' | 'tasks' | 'schedule' | 'cards'
 let hideTimer = null;
 let clickTimer = null;
 let lastNudge = Date.now();
@@ -202,6 +202,7 @@ function render() {
 
   renderTasks();
   renderSchedule();
+  renderCards();
   setMood(currentMood());
   syncSize();
 }
@@ -212,9 +213,12 @@ function showTab(t) {
   tabToday.classList.toggle('active', t === 'today');
   tabTasks.classList.toggle('active', t === 'tasks');
   tabSched.classList.toggle('active', t === 'schedule');
+  tabCards.classList.toggle('active', t === 'cards');
   viewToday.classList.toggle('hidden', t !== 'today');
   viewTasks.classList.toggle('hidden', t !== 'tasks');
   viewSched.classList.toggle('hidden', t !== 'schedule');
+  viewCards.classList.toggle('hidden', t !== 'cards');
+  bubble.classList.toggle('tall', t === 'cards'); // flashcards get a bit more height than the lists
   clearTimeout(hideTimer); // never auto-close while browsing the backlog
   sizeBubble();
   render();
@@ -494,6 +498,498 @@ schedAdd.onclick = async () => {
   renderSchedule();
 };
 
+// ---------- flashcards: Manual / Auto (AI) card making, spaced-repetition study ----------
+const tabCards = $('tab-cards');
+const viewCards = $('view-cards');
+const cardsDuePip = $('cards-due');
+const deckNamesList = $('deck-names');
+const cardsHome = $('cards-home');
+const cardsMsg = $('cards-msg');
+const cardsStudyBtn = $('cards-study');
+const deckList = $('deck-list');
+const manualView = $('cards-manual-view');
+const manualTitle = $('manual-title');
+const cardForm = $('card-form');
+const cardDeck = $('card-deck');
+const cardFront = $('card-front');
+const cardBack = $('card-back');
+const cardSave = $('card-save');
+const cardCancel = $('card-cancel');
+const manualMsg = $('manual-msg');
+const cardList = $('card-list');
+const autoView = $('cards-auto-view');
+const autoSetup = $('auto-setup');
+const setupStatus = $('setup-status');
+const setupStep = $('setup-step');
+const setupCmd = $('setup-cmd');
+const setupRun = $('setup-run');
+const setupCopy = $('setup-copy');
+const setupWait = $('setup-wait');
+const setupFine = $('setup-fine');
+const autoSetupDone = $('auto-setup-done');
+const autoMain = $('auto-main');
+const autoWho = $('auto-who');
+const autoForm = $('auto-form');
+const autoDeck = $('auto-deck');
+const autoText = $('auto-text');
+const autoCount = $('auto-count');
+const autoGo = $('auto-go');
+const autoMsg = $('auto-msg');
+const autoPreview = $('auto-preview');
+const autoAdd = $('auto-add');
+const studyView = $('cards-study-view');
+const studyProgress = $('study-progress');
+const studyCard = $('study-card');
+const studyDeck = $('study-deck');
+const studyFront = $('study-front');
+const studyBack = $('study-back');
+const studyShow = $('study-show');
+const studyGrades = $('study-grades');
+const studyDone = $('study-done');
+
+let cardsScreen = 'home'; // 'home' | 'manual' | 'auto' | 'study'
+let editingCardId = null;
+let study = null; // { deck, current, shown, done }
+let autoCards = []; // AI-made cards waiting for the user to keep or drop
+let autoBusy = false;
+let autoSetupOpen = false;
+let setupProvider = 'claude';
+
+const allCards = () => state.cards || [];
+const dueCards = (deck) => allCards().filter((c) => (!deck || c.deck === deck) && SRS.isDue(c));
+const deckNames = () => [...new Set(allCards().map((c) => c.deck))].sort((a, b) => a.localeCompare(b));
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const cleanDeckName = (v) => v.trim() || 'General';
+function nextDueLabel(deck) {
+  const later = allCards().filter((c) => !deck || c.deck === deck);
+  if (!later.length) return '';
+  const soonest = Math.min(...later.map((c) => c.due));
+  return `Next card in ${SRS.label(Math.max(0, soonest - Date.now()))}.`;
+}
+function setMsg(el, text, isError = false) {
+  el.textContent = text;
+  el.classList.toggle('err', isError);
+}
+function iconButton(cls, label, tip) {
+  const b = document.createElement('button');
+  b.className = cls;
+  b.type = 'button';
+  b.textContent = label;
+  b.title = tip;
+  return b;
+}
+// first click arms the button, a second click within 2.5s confirms
+function confirmClick(btn, onConfirm) {
+  let armed = null;
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    if (!armed) {
+      btn.textContent = 'Sure?';
+      btn.classList.add('armed');
+      armed = setTimeout(() => {
+        armed = null;
+        btn.textContent = '✕';
+        btn.classList.remove('armed');
+      }, 2500);
+      return;
+    }
+    clearTimeout(armed);
+    onConfirm();
+  };
+}
+
+function showCardsScreen(s) {
+  cardsScreen = s;
+  cardsHome.classList.toggle('hidden', s !== 'home');
+  manualView.classList.toggle('hidden', s !== 'manual');
+  autoView.classList.toggle('hidden', s !== 'auto');
+  studyView.classList.toggle('hidden', s !== 'study');
+  renderCards();
+  if (s === 'study') renderStudy();
+}
+tabCards.onclick = () => showTab('cards');
+viewCards.querySelectorAll('.cards-back').forEach((b) => (b.onclick = () => showCardsScreen('home')));
+
+function renderCards() {
+  const cards = allCards();
+  const due = dueCards(null).length;
+  cardsDuePip.textContent = due > 99 ? '99+' : due;
+  cardsDuePip.classList.toggle('hidden', due === 0);
+  if (tab === 'cards') title.textContent = 'Flashcards';
+
+  const names = deckNames();
+  deckNamesList.textContent = '';
+  for (const n of names) {
+    const o = document.createElement('option');
+    o.value = n;
+    deckNamesList.append(o);
+  }
+
+  // home
+  setMsg(
+    cardsMsg,
+    cards.length
+      ? `${plural(cards.length, 'card')} in ${plural(names.length, 'deck')}.`
+      : 'Make your first cards: write them yourself, or let AI make them from your notes.'
+  );
+  cardsStudyBtn.classList.toggle('hidden', !cards.length);
+  cardsStudyBtn.disabled = due === 0;
+  cardsStudyBtn.textContent = due ? `Study ${plural(due, 'due card')}` : `Nothing due · ${nextDueLabel(null)}`;
+
+  deckList.textContent = '';
+  for (const name of names) {
+    const inDeck = cards.filter((c) => c.deck === name);
+    const d = inDeck.filter((c) => SRS.isDue(c)).length;
+    const li = document.createElement('li');
+    const txt = document.createElement('span');
+    txt.className = 'txt';
+    txt.textContent = name;
+    const meta = document.createElement('span');
+    meta.className = 'deck-meta';
+    meta.textContent = `${d ? d + ' due · ' : ''}${plural(inDeck.length, 'card')}`;
+    txt.append(meta);
+    txt.title = d ? 'Study this deck' : 'Browse this deck';
+    txt.onclick = () => (d ? startStudy(name) : openManual(name));
+    const ed = iconButton('ed', '✎', 'Add or edit cards');
+    ed.onclick = () => openManual(name);
+    const rm = iconButton('rm', '✕', 'Delete deck');
+    confirmClick(rm, async () => {
+      state = await api.deckRemove(name);
+      render();
+    });
+    li.append(txt, ed, rm);
+    deckList.append(li);
+  }
+
+  if (cardsScreen === 'manual') renderManualList();
+  if (cardsScreen === 'auto') renderAuto();
+}
+
+// ----- Manual -----
+function resetCardForm() {
+  editingCardId = null;
+  cardFront.value = '';
+  cardBack.value = '';
+  cardSave.textContent = 'Add card';
+  cardCancel.classList.add('hidden');
+}
+function openManual(deck) {
+  const recent = allCards()[allCards().length - 1];
+  cardDeck.value = deck || cardDeck.value || (recent ? recent.deck : '');
+  resetCardForm();
+  setMsg(manualMsg, '');
+  showCardsScreen('manual');
+  setTimeout(() => (cardDeck.value ? cardFront : cardDeck).focus(), 50);
+}
+function renderManualList() {
+  const deck = cleanDeckName(cardDeck.value);
+  const inDeck = allCards().filter((c) => c.deck === deck);
+  manualTitle.textContent = `${deck} · ${plural(inDeck.length, 'card')}`;
+  cardList.textContent = '';
+  for (const c of [...inDeck].reverse()) {
+    const li = document.createElement('li');
+    if (c.id === editingCardId) li.classList.add('editing');
+    const txt = document.createElement('span');
+    txt.className = 'txt';
+    txt.textContent = c.front;
+    const back = document.createElement('small');
+    back.textContent = c.back;
+    txt.append(back);
+    const ed = iconButton('ed', '✎', 'Edit');
+    ed.onclick = () => {
+      editingCardId = c.id;
+      cardDeck.value = c.deck;
+      cardFront.value = c.front;
+      cardBack.value = c.back;
+      cardSave.textContent = 'Save';
+      cardCancel.classList.remove('hidden');
+      renderManualList();
+      cardFront.focus();
+    };
+    const rm = iconButton('rm', '✕', 'Delete card');
+    confirmClick(rm, async () => {
+      if (editingCardId === c.id) resetCardForm();
+      state = await api.cardRemove(c.id);
+      render();
+    });
+    li.append(txt, ed, rm);
+    cardList.append(li);
+  }
+}
+$('cards-manual').onclick = () => openManual('');
+cardDeck.addEventListener('input', renderManualList);
+cardCancel.onclick = () => {
+  resetCardForm();
+  renderManualList();
+};
+cardForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const front = cardFront.value.trim();
+  const back = cardBack.value.trim();
+  if (!front || !back) {
+    setMsg(manualMsg, 'Fill in both the front and the back.', true);
+    (front ? cardBack : cardFront).focus();
+    return;
+  }
+  const deck = cleanDeckName(cardDeck.value);
+  cardDeck.value = deck;
+  const wasEditing = !!editingCardId;
+  state = wasEditing ? await api.cardEdit(editingCardId, deck, front, back) : await api.cardAdd(deck, front, back);
+  resetCardForm();
+  setMsg(manualMsg, wasEditing ? 'Saved.' : 'Added! Write the next one.');
+  render();
+  if (!wasEditing) playAnim('hop', 700);
+  cardFront.focus();
+});
+// Cmd/Ctrl+Enter saves from anywhere in a card form
+for (const el of [cardDeck, cardFront, cardBack]) {
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      cardForm.requestSubmit();
+    }
+  });
+}
+
+// ----- Auto (AI, through the person's own Claude or ChatGPT subscription) -----
+const AI_INFO = {
+  claude: { name: 'Claude', app: 'Claude Code', maker: 'Anthropic', plans: 'Claude Pro or Max' },
+  openai: { name: 'ChatGPT', app: 'Codex', maker: 'OpenAI', plans: 'ChatGPT Plus or Pro' }
+};
+const IS_MAC = navigator.userAgent.includes('Mac');
+const aiStatus = {}; // provider -> { installed, loggedIn, account, commands } once checked
+let statusPoll = null;
+let setupStepName = null; // 'install' | 'login' | null
+const aiReady = (p) => !!(aiStatus[p] && aiStatus[p].installed && aiStatus[p].loggedIn);
+
+async function checkStatus(provider) {
+  aiStatus[provider] = (await api.aiStatus(provider)) || { installed: false, loggedIn: false };
+  if (cardsScreen === 'auto') renderAuto();
+}
+// while setup waits for an install or sign-in in Terminal, keep checking so the screen updates by itself
+function pollStatus(on) {
+  if (!on) {
+    clearInterval(statusPoll);
+    statusPoll = null;
+  } else if (!statusPoll) {
+    statusPoll = setInterval(() => checkStatus(setupProvider), 4000);
+  }
+}
+
+async function openAuto() {
+  setupProvider = state.ai.provider;
+  if (!autoDeck.value) {
+    const recent = allCards()[allCards().length - 1];
+    autoDeck.value = recent ? recent.deck : '';
+  }
+  setupWait.textContent = '';
+  autoSetupOpen = !aiReady(setupProvider);
+  showCardsScreen('auto');
+  await checkStatus(setupProvider);
+  if (autoSetupOpen && aiReady(setupProvider)) {
+    autoSetupOpen = false;
+    renderAuto();
+  }
+  if (!autoSetupOpen) setTimeout(() => autoText.focus(), 50);
+}
+function renderAuto() {
+  autoSetup.classList.toggle('hidden', !autoSetupOpen);
+  autoMain.classList.toggle('hidden', autoSetupOpen);
+
+  const info = AI_INFO[setupProvider];
+  const st = aiStatus[setupProvider];
+  autoSetup.querySelectorAll('[data-provider]').forEach((b) => b.classList.toggle('active', b.dataset.provider === setupProvider));
+  setupStepName = null;
+  if (!st) {
+    setupStatus.textContent = `Checking for ${info.app}…`;
+  } else if (!st.installed) {
+    setupStepName = 'install';
+    setupStatus.textContent = `Step 1 of 2: install ${info.app}, ${info.maker}’s free app that lets Promise Pet use your ${info.name} subscription.`;
+  } else if (!st.loggedIn) {
+    setupStepName = 'login';
+    setupStatus.textContent = `Step 2 of 2: sign in to ${info.app} with your ${info.name} account. A browser window opens to log in.`;
+  } else {
+    setupStatus.textContent = `✓ ${info.app} is signed in with your ${st.account}.`;
+  }
+  setupStep.classList.toggle('hidden', !setupStepName);
+  if (setupStepName) {
+    setupCmd.textContent = st.commands[setupStepName];
+    setupRun.classList.toggle('hidden', !IS_MAC);
+    setupRun.textContent = setupStepName === 'install' ? 'Install in Terminal' : 'Sign in in Terminal';
+  }
+  autoSetupDone.classList.toggle('hidden', !aiReady(setupProvider));
+  autoSetupDone.textContent = `Use ${info.name}`;
+  setupFine.textContent = `Works with ${info.plans}. Cards are made by ${info.app} on this computer and count toward your plan’s usage limits.`;
+  pollStatus(autoSetupOpen && tab === 'cards' && cardsScreen === 'auto' && !!st && !aiReady(setupProvider));
+
+  autoWho.textContent = `Using your ${AI_INFO[state.ai.provider].name} subscription`;
+  autoGo.disabled = autoBusy;
+  autoGo.textContent = autoBusy ? 'Generating…' : 'Generate';
+
+  autoPreview.textContent = '';
+  autoCards.forEach((c, i) => {
+    const li = document.createElement('li');
+    const txt = document.createElement('span');
+    txt.className = 'txt';
+    txt.textContent = c.front;
+    const back = document.createElement('small');
+    back.textContent = c.back;
+    txt.append(back);
+    const rm = iconButton('rm', '✕', 'Don’t keep this card');
+    rm.onclick = () => {
+      autoCards.splice(i, 1);
+      renderAuto();
+    };
+    li.append(txt, rm);
+    autoPreview.append(li);
+  });
+  autoAdd.classList.toggle('hidden', !autoCards.length);
+  autoAdd.textContent = `Add ${plural(autoCards.length, 'card')} to “${cleanDeckName(autoDeck.value)}”`;
+}
+function openSetup() {
+  setupProvider = state.ai.provider;
+  autoSetupOpen = true;
+  setupWait.textContent = '';
+  renderAuto();
+  checkStatus(setupProvider);
+}
+$('cards-auto').onclick = openAuto;
+$('auto-change').onclick = openSetup;
+autoSetup.querySelectorAll('[data-provider]').forEach((b) => {
+  b.onclick = () => {
+    setupProvider = b.dataset.provider;
+    setupWait.textContent = '';
+    renderAuto();
+    checkStatus(setupProvider);
+  };
+});
+setupRun.onclick = async () => {
+  const opened = await api.aiOpenTerminal(setupProvider, setupStepName);
+  setupWait.textContent = opened
+    ? 'Finish in the Terminal window. This screen updates by itself when it’s done.'
+    : 'Run the command in a terminal. This screen updates by itself when it’s done.';
+};
+setupCopy.onclick = () => {
+  api.aiCopyCommand(setupProvider, setupStepName);
+  setupCopy.textContent = 'Copied!';
+  setupWait.textContent = 'Paste it into a terminal and run it. This screen updates by itself when it’s done.';
+  setTimeout(() => (setupCopy.textContent = 'Copy command'), 1500);
+};
+autoSetupDone.onclick = async () => {
+  state = await api.aiSetProvider(setupProvider);
+  autoSetupOpen = false;
+  render();
+  autoText.focus();
+};
+autoDeck.addEventListener('input', () => renderAuto());
+autoForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (autoBusy) return;
+  const text = autoText.value.trim();
+  if (!text) {
+    setMsg(autoMsg, 'Paste some notes or type a topic first.', true);
+    autoText.focus();
+    return;
+  }
+  autoBusy = true;
+  setMsg(autoMsg, `${AI_INFO[state.ai.provider].name} is writing your cards… this can take a minute.`);
+  renderAuto();
+  playAnim('hop', 700);
+  const res = await api.aiGenerate(text, Number(autoCount.value));
+  autoBusy = false;
+  if (res.needsSetup) {
+    openSetup();
+  } else if (res.error) {
+    setMsg(autoMsg, res.error, true);
+  } else {
+    autoCards = res.cards;
+    setMsg(autoMsg, `${plural(autoCards.length, 'card')} ready. Remove any you don’t want, then add them.`);
+  }
+  renderAuto();
+});
+autoText.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    autoForm.requestSubmit();
+  }
+});
+autoAdd.onclick = async () => {
+  const deck = cleanDeckName(autoDeck.value);
+  const n = autoCards.length;
+  state = await api.cardAddMany(deck, autoCards);
+  autoCards = [];
+  autoText.value = '';
+  setMsg(autoMsg, `Added ${plural(n, 'card')} to “${deck}”. Go back to study them, or make more.`);
+  render();
+  playAnim('hop', 700);
+};
+
+// ----- Study -----
+function startStudy(deck) {
+  study = { deck, current: null, shown: false, done: 0 };
+  nextStudyCard();
+  showCardsScreen('study');
+}
+function nextStudyCard() {
+  const queue = dueCards(study.deck).sort((a, b) => a.due - b.due);
+  study.current = queue[0] || null;
+  study.left = queue.length;
+  study.shown = false;
+}
+function renderStudy() {
+  if (!study) return;
+  const c = study.current;
+  studyCard.classList.toggle('hidden', !c);
+  studyShow.classList.toggle('hidden', !c || study.shown);
+  studyGrades.classList.toggle('hidden', !c || !study.shown);
+  studyDone.classList.toggle('hidden', !!c);
+  studyProgress.textContent = c ? `${study.deck || 'All decks'} · ${study.left} left` : '';
+  if (!c) {
+    studyDone.textContent = study.done
+      ? `Done! You reviewed ${plural(study.done, 'card')}. ${nextDueLabel(study.deck)}`
+      : `Nothing due right now. ${nextDueLabel(study.deck)}`;
+    return;
+  }
+  studyDeck.textContent = c.deck;
+  studyFront.textContent = c.front;
+  studyBack.textContent = c.back;
+  studyBack.classList.toggle('hidden', !study.shown);
+  studyGrades.querySelectorAll('[data-grade]').forEach((b, i) => {
+    b.querySelector('small').textContent = `${SRS.label(SRS.schedule(c, b.dataset.grade).wait)} · ${i + 1}`;
+  });
+}
+function showAnswer() {
+  if (!study || !study.current) return;
+  study.shown = true;
+  renderStudy();
+}
+async function gradeCard(grade) {
+  if (!study || !study.current || !study.shown) return;
+  state = await api.cardReview(study.current.id, grade);
+  study.done++;
+  nextStudyCard();
+  render();
+  renderStudy();
+  if (!study.current) {
+    playAnim('dance', 2600);
+    burst();
+  }
+}
+cardsStudyBtn.onclick = () => startStudy(null);
+studyShow.onclick = showAnswer;
+studyGrades.querySelectorAll('[data-grade]').forEach((b) => (b.onclick = () => gradeCard(b.dataset.grade)));
+// space/enter shows the answer, 1–4 picks Again/Hard/Good/Easy
+document.addEventListener('keydown', (e) => {
+  if (tab !== 'cards' || cardsScreen !== 'study' || bubble.classList.contains('hidden')) return;
+  if (e.target.matches && e.target.matches('input, textarea, select')) return;
+  if ((e.key === ' ' || e.key === 'Enter') && study && study.current && !study.shown) {
+    e.preventDefault();
+    showAnswer();
+  } else if (study && study.shown && ['1', '2', '3', '4'].includes(e.key)) {
+    gradeCard(SRS.GRADES[Number(e.key) - 1]);
+  }
+});
+
 // ---------- bubble show/hide ----------
 const autoHideAllowed = () => tab === 'today' && state.today.length > 0;
 function openBubble({ autoHide = true } = {}) {
@@ -597,7 +1093,7 @@ async function refresh() {
 }
 
 function nudgeTick() {
-  if (tab === 'schedule' && !bubble.classList.contains('hidden')) return; // don't yank the table away mid-read
+  if ((tab === 'schedule' || tab === 'cards') && !bubble.classList.contains('hidden')) return; // don't yank the table or a study session away
   const now = Date.now();
   const total = state.today.length;
   if (total === 0 && !isNight() && now - lastNudge >= ASK_EVERY_MS) {

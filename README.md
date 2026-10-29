@@ -47,6 +47,27 @@ The third tab, **Schedule**, opens a big table (the bubble grows to fill the spa
 
 To pre-fill the table, put rows in `schedule-seed.js`; it's only used the first time, after that your edits are saved in `promises.json`.
 
+## Flashcards (spaced repetition, like Anki)
+
+The fourth tab, **Flashcards**, has two ways to make cards:
+
+- **Manual:** pick a deck (e.g. "Biology"), write the front and back, press **Add card** (or ⌘/Ctrl + Enter). Click ✎ on a card to edit it, ✕ twice to delete it.
+- **Auto:** paste your notes, or just type a topic, choose 5, 10 or 20 cards, and press **Generate**. The AI writes the cards; remove any you don't want, then add the rest to a deck.
+
+Auto uses your own **Claude** (Pro or Max) or **ChatGPT** (Plus or Pro) subscription. No API key needed. It works through each company's official app on your computer: **Claude Code** for Claude, **Codex** for ChatGPT. The first time you open Auto, pick one and the app walks you through two steps:
+
+1. **Install** the app (one Terminal command; "Install in Terminal" runs it for you on a Mac).
+2. **Sign in** with your subscription ("Sign in in Terminal" opens the login page in your browser).
+
+The screen updates by itself once each step is done. Cards are made on your computer, in an empty folder with no file or web access, and count toward your plan's usage limits. Use "change" to switch between Claude and ChatGPT.
+
+**Study** shows each due card's front; press **Show answer** (or Space), then rate how well you knew it. Each button shows when you'll see the card again:
+
+- **Again** (1): you forgot. It comes back in a minute.
+- **Hard** (2), **Good** (3), **Easy** (4): the gap grows each time you remember, so cards you know well show up less and less often.
+
+The red number on the tab is how many cards are due. Click a deck to study just that deck. The dragon won't nag or switch tabs while you're in Flashcards.
+
 ## What the dragon does
 
 - No promises today? It asks, and asks again every 30 minutes until you answer. If you left something unfinished yesterday, it offers to carry it over.
@@ -61,7 +82,7 @@ The tray / menu bar icon lets you hide or show the dragon, open promises, reset 
 
 Run `npm start` from a terminal and look for red error text. You can also open the tray menu, choose "Developer tools (debug)", and check the Console tab.
 
-Your data is saved locally in a small `promises.json` in the app's user-data folder (kept for 60 days).
+Your data is saved locally in a small `promises.json` in the app's user-data folder (daily promises are kept for 60 days; backlog, schedule and flashcards are kept until you delete them).
 
 Reminder timings are constants at the top of `renderer.js`.
 

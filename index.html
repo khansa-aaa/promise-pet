@@ -16,6 +16,7 @@
         <button id="tab-today" class="tab active" type="button">Today</button>
         <button id="tab-tasks" class="tab" type="button">Backlog <span id="tasks-count"></span></button>
         <button id="tab-sched" class="tab" type="button">Schedule</button>
+        <button id="tab-cards" class="tab" type="button">Flashcards<span id="cards-due" class="tab-pip hidden"></span></button>
       </div>
 
       <div id="view-today">
@@ -55,6 +56,91 @@
             </thead>
             <tbody id="sched-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <div id="view-cards" class="hidden">
+        <datalist id="deck-names"></datalist>
+
+        <div id="cards-home">
+          <div id="cards-msg" class="cards-msg"></div>
+          <button id="cards-study" class="btn wide-btn" type="button"></button>
+          <div class="cards-modes">
+            <button id="cards-manual" class="mode" type="button"><b>Manual</b><span>Write your own cards</span></button>
+            <button id="cards-auto" class="mode" type="button"><b>Auto</b><span>AI makes cards from your notes</span></button>
+          </div>
+          <ul id="deck-list" class="items"></ul>
+        </div>
+
+        <div id="cards-manual-view" class="hidden">
+          <div class="cards-bar"><button class="cards-back link" type="button">‹ Back</button><span id="manual-title"></span></div>
+          <form id="card-form" class="card-form">
+            <input id="card-deck" type="text" list="deck-names" maxlength="60" placeholder="Deck, e.g. Biology" autocomplete="off" />
+            <textarea id="card-front" rows="2" maxlength="1000" placeholder="Front: question or prompt"></textarea>
+            <textarea id="card-back" rows="2" maxlength="1000" placeholder="Back: answer"></textarea>
+            <div class="row">
+              <button id="card-save" class="btn" type="submit">Add card</button>
+              <button id="card-cancel" class="btn plain hidden" type="button">Cancel</button>
+              <span class="hint">⌘/Ctrl + Enter</span>
+            </div>
+          </form>
+          <div id="manual-msg" class="cards-msg"></div>
+          <ul id="card-list" class="items cards-items"></ul>
+        </div>
+
+        <div id="cards-auto-view" class="hidden">
+          <div class="cards-bar"><button class="cards-back link" type="button">‹ Back</button><span>Auto flashcards</span></div>
+
+          <div id="auto-setup">
+            <div class="cards-msg">Use your Claude or ChatGPT subscription. No API key needed.</div>
+            <div class="seg">
+              <button type="button" data-provider="claude">Claude</button>
+              <button type="button" data-provider="openai">ChatGPT</button>
+            </div>
+            <div id="setup-status" class="cards-msg"></div>
+            <div id="setup-step" class="hidden">
+              <code id="setup-cmd"></code>
+              <div class="row">
+                <button id="setup-run" class="btn" type="button"></button>
+                <button id="setup-copy" class="btn plain" type="button">Copy command</button>
+              </div>
+              <div id="setup-wait" class="fine"></div>
+            </div>
+            <button id="auto-setup-done" class="btn wide-btn hidden" type="button"></button>
+            <div id="setup-fine" class="fine"></div>
+          </div>
+
+          <div id="auto-main">
+            <div class="cards-msg"><span id="auto-who"></span> · <button id="auto-change" class="link" type="button">change</button></div>
+            <form id="auto-form" class="card-form">
+              <input id="auto-deck" type="text" list="deck-names" maxlength="60" placeholder="Deck, e.g. Biology" autocomplete="off" />
+              <textarea id="auto-text" rows="5" placeholder="Paste your notes, or just type a topic (e.g. “Krebs cycle”)"></textarea>
+              <div class="row">
+                <select id="auto-count"><option value="5">5 cards</option><option value="10" selected>10 cards</option><option value="20">20 cards</option></select>
+                <button id="auto-go" class="btn" type="submit">Generate</button>
+              </div>
+            </form>
+            <div id="auto-msg" class="cards-msg"></div>
+            <ul id="auto-preview" class="items cards-items"></ul>
+            <button id="auto-add" class="btn wide-btn hidden" type="button"></button>
+          </div>
+        </div>
+
+        <div id="cards-study-view" class="hidden">
+          <div class="cards-bar"><button class="cards-back link" type="button">‹ Back</button><span id="study-progress"></span></div>
+          <div id="study-card">
+            <div id="study-deck"></div>
+            <div id="study-front"></div>
+            <div id="study-back" class="hidden"></div>
+          </div>
+          <button id="study-show" class="btn wide-btn" type="button">Show answer <small>space</small></button>
+          <div id="study-grades" class="hidden">
+            <button type="button" data-grade="again">Again<small></small></button>
+            <button type="button" data-grade="hard">Hard<small></small></button>
+            <button type="button" data-grade="good">Good<small></small></button>
+            <button type="button" data-grade="easy">Easy<small></small></button>
+          </div>
+          <div id="study-done" class="hidden"></div>
         </div>
       </div>
     </div>
@@ -184,6 +270,7 @@
       </div>
     </div>
   </div>
+  <script src="srs.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

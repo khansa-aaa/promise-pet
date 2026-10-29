@@ -1,7 +1,9 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const DEFAULT_SCHEDULE = require('./schedule-seed');
+const SRS = require('./srs');
+const ai = require('./ai');
 
 // Collapsed window = just the pet. The renderer asks for a bigger size when the bubble opens.
 const COLLAPSED_W = 186;
@@ -33,6 +35,8 @@ function loadStore() {
   }
   // first run with the schedule feature: start from the seeded exam dates
   if (!Array.isArray(store.schedule)) store.schedule = DEFAULT_SCHEDULE.map((r) => ({ id: newId(), ...r }));
+  if (!Array.isArray(store.cards)) store.cards = [];
+  if (!store.ai || !ai.PROVIDERS[store.ai.provider]) store.ai = { provider: 'claude' };
 }
 function saveStore() {
   try {
@@ -59,7 +63,15 @@ function getState() {
   const prev = (store.days[yesterdayKey()] || []).filter((p) => !p.done);
   const alreadyCarried = new Set(today.map((p) => p.text.toLowerCase()));
   const carry = prev.filter((p) => !alreadyCarried.has(p.text.toLowerCase()));
-  return { date, today, carryCount: carry.length, tasks: store.tasks, schedule: store.schedule };
+  return {
+    date,
+    today,
+    carryCount: carry.length,
+    tasks: store.tasks,
+    schedule: store.schedule,
+    cards: store.cards,
+    ai: { provider: store.ai.provider }
+  };
 }
 function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -316,6 +328,85 @@ ipcMain.handle('schedule:remove', (_e, id) => {
   store.schedule = store.schedule.filter((x) => x.id !== id);
   saveStore();
   return getState();
+});
+
+// ----- flashcards: decks of front/back cards, reviewed with spaced repetition -----
+const DECK_MAX = 60;
+const cleanDeck = (d) => String(d || '').trim().slice(0, DECK_MAX) || 'General';
+const cleanSide = (t, max) => String(t || '').trim().slice(0, max);
+
+ipcMain.handle('card:add', (_e, deck, front, back) => {
+  const f = cleanSide(front, ai.FRONT_MAX);
+  const b = cleanSide(back, ai.BACK_MAX);
+  if (f && b) {
+    store.cards.push(SRS.newCard(newId(), cleanDeck(deck), f, b));
+    saveStore();
+  }
+  return getState();
+});
+
+// add several cards at once (the AI preview's "Add" button)
+ipcMain.handle('card:addMany', (_e, deck, cards) => {
+  const d = cleanDeck(deck);
+  for (const c of Array.isArray(cards) ? cards.slice(0, 50) : []) {
+    const f = cleanSide(c && c.front, ai.FRONT_MAX);
+    const b = cleanSide(c && c.back, ai.BACK_MAX);
+    if (f && b) store.cards.push(SRS.newCard(newId(), d, f, b));
+  }
+  saveStore();
+  return getState();
+});
+
+ipcMain.handle('card:edit', (_e, id, deck, front, back) => {
+  const c = store.cards.find((x) => x.id === id);
+  const f = cleanSide(front, ai.FRONT_MAX);
+  const b = cleanSide(back, ai.BACK_MAX);
+  if (c && f && b) {
+    Object.assign(c, { deck: cleanDeck(deck), front: f, back: b });
+    saveStore();
+  }
+  return getState();
+});
+
+ipcMain.handle('card:remove', (_e, id) => {
+  store.cards = store.cards.filter((x) => x.id !== id);
+  saveStore();
+  return getState();
+});
+
+ipcMain.handle('card:review', (_e, id, grade) => {
+  const i = store.cards.findIndex((x) => x.id === id);
+  if (i >= 0 && SRS.GRADES.includes(grade)) {
+    store.cards[i] = SRS.review(store.cards[i], grade);
+    saveStore();
+  }
+  return getState();
+});
+
+ipcMain.handle('deck:remove', (_e, deck) => {
+  store.cards = store.cards.filter((x) => x.deck !== deck);
+  saveStore();
+  return getState();
+});
+
+// ----- AI ("Auto" mode): the person's own Claude or ChatGPT subscription via its CLI -----
+ipcMain.handle('ai:setProvider', (_e, provider) => {
+  if (ai.PROVIDERS[provider]) {
+    store.ai.provider = provider;
+    saveStore();
+  }
+  return getState();
+});
+
+ipcMain.handle('ai:status', (_e, provider) => (ai.PROVIDERS[provider] ? ai.status(provider) : null));
+
+ipcMain.handle('ai:generate', (_e, material, count) => ai.generateCards(store.ai.provider, material, Number(count)));
+
+// step is 'install' or 'login'; the commands are fixed in ai.js, never taken from the page
+ipcMain.handle('ai:openTerminal', (_e, provider, step) => (ai.PROVIDERS[provider] ? ai.openInTerminal(provider, step) : false));
+ipcMain.on('ai:copyCommand', (_e, provider, step) => {
+  const p = ai.PROVIDERS[provider];
+  if (p) clipboard.writeText(step === 'install' ? p.install : p.login);
 });
 
 ipcMain.handle('promise:carry', () => {
