@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="stage">
+    <div id="bubble" class="hidden">
+      <div id="bubble-head">
+        <span id="bubble-title"></span>
+        <button id="bubble-close" title="Hide">×</button>
+      </div>
+      <div id="tabs">
+        <button id="tab-today" class="tab active" type="button">Today</button>
+        <button id="tab-tasks" class="tab" type="button">Backlog <span id="tasks-count"></span></button>
+        <button id="tab-sched" class="tab" type="button">Schedule</button>
+      </div>
+
+      <div id="view-today">
+        <div id="bubble-msg"></div>
+        <ul id="list" class="items"></ul>
+        <button id="carry" class="hidden"></button>
+        <form id="add-form">
+          <input id="add-input" type="text" maxlength="140" placeholder="I promise to…" autocomplete="off" />
+          <button type="submit">Add</button>
+        </form>
+      </div>
+
+      <div id="view-tasks" class="hidden">
+        <div id="tasks-msg"></div>
+        <ul id="tasklist" class="items"></ul>
+        <button id="clear-done" class="hidden" type="button"></button>
+        <form id="task-form">
+          <input id="task-input" type="text" maxlength="200" placeholder="Add to the backlog…" autocomplete="off" />
+          <button type="submit">Add</button>
+        </form>
+      </div>
+
+      <div id="view-sched" class="hidden">
+        <div id="sched-bar">
+          <span id="sched-msg"></span>
+          <span id="sched-legend"><i class="dot soon"></i>≤ 3 days <i class="dot week"></i>≤ 1 week <i class="dot later"></i>later</span>
+          <label id="sched-past-label"><input id="sched-hide-past" type="checkbox" /> Hide past</label>
+          <button id="sched-add" type="button">+ Add row</button>
+        </div>
+        <div id="sched-wrap">
+          <table id="sched">
+            <colgroup>
+              <col class="c-date" /><col class="c-mod" /><col class="c-what" /><col class="c-time" /><col class="c-venue" /><col class="c-notes" /><col class="c-rm" />
+            </colgroup>
+            <thead>
+              <tr><th>Date</th><th>Module</th><th>What</th><th>Time</th><th>Venue</th><th>Scope &amp; notes</th><th></th></tr>
+            </thead>
+            <tbody id="sched-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="pet-wrap" title="Click me · drag to move">
+      <div id="badge" class="hidden">0</div>
+      <div id="zzz" class="hidden">z z Z</div>
+      <div id="confetti"></div>
+      <div id="pet" class="mood-ask">
+        <svg class="dragon" viewBox="0 0 200 190" width="160" height="152" xmlns="http://www.w3.org/2000/svg" stroke-linejoin="round" stroke-linecap="round">
+          <defs>
+            <clipPath id="headclip">
+              <path d="M34,100 C28,88 36,72 52,58 C68,44 92,38 112,42 C140,48 158,72 152,100 C148,120 124,134 96,134 C70,134 44,126 34,100 Z"/>
+            </clipPath>
+          </defs>
+
+          <!-- ground shadow -->
+          <ellipse cx="100" cy="179" rx="72" ry="7" fill="#0d0b14" opacity="0.2"/>
+
+          <!-- tail: curls up on the far side, spikes along the back edge -->
+          <g class="tail">
+            <path d="M188,117 L200,123 L188,130 Z" fill="#e6d8bd" stroke="#0d0b14" stroke-width="3"/>
+            <path d="M184,105 L196,110 L184,117 Z" fill="#e6d8bd" stroke="#0d0b14" stroke-width="3"/>
+            <path d="M177,96 L187,99 L178,106 Z" fill="#e6d8bd" stroke="#0d0b14" stroke-width="3"/>
+            <path d="M128,152 C152,170 190,162 190,134 C190,120 186,110 176,102 C174,114 170,126 160,132 C150,140 136,140 124,136 Z" fill="#2e2e3b" stroke="#0d0b14" stroke-width="4"/>
+            <path d="M136,156 C156,166 182,158 186,138" fill="none" stroke="#e6d8bd" stroke-width="3" opacity="0.0"/>
+            <circle cx="152" cy="152" r="4" fill="#484862"/>
+            <circle cx="172" cy="148" r="3.2" fill="#484862"/>
+            <circle cx="182" cy="132" r="3.5" fill="#484862"/>
+            <circle cx="180" cy="116" r="2.8" fill="#484862"/>
+          </g>
+
+          <!-- bat wing (far side) -->
+          <g class="wing">
+            <path d="M138,100 C144,80 156,58 184,42 L180,58 L196,62 L186,76 L196,88 L172,88 C160,92 152,100 148,110 Z" fill="#7b2d48" stroke="#0d0b14" stroke-width="4"/>
+            <path d="M142,96 L184,42" fill="none" stroke="#0d0b14" stroke-width="2.5" opacity="0.55"/>
+            <path d="M144,98 L196,62" fill="none" stroke="#0d0b14" stroke-width="2.5" opacity="0.55"/>
+            <path d="M146,100 L196,88" fill="none" stroke="#0d0b14" stroke-width="2.5" opacity="0.55"/>
+          </g>
+
+          <!-- horns: two small dark ones on top, one big cream curled one at the back -->
+          <g class="horns">
+            <path d="M58,62 C54,44 62,28 78,18 C80,32 80,46 76,58 Z" fill="#3a3a4f" stroke="#0d0b14" stroke-width="3.5"/>
+            <path d="M61,56 C59,44 65,33 74,25" fill="none" stroke="#7a7a99" stroke-width="2.2" opacity="0.9"/>
+            <path d="M98,52 C96,32 108,14 130,8 C130,24 128,40 122,54 Z" fill="#3a3a4f" stroke="#0d0b14" stroke-width="3.5"/>
+            <path d="M101,46 C100,32 110,20 124,13" fill="none" stroke="#7a7a99" stroke-width="2.2" opacity="0.9"/>
+            <path d="M132,62 C136,42 152,28 172,24 C166,34 160,48 156,68 Z" fill="#e6d8bd" stroke="#0d0b14" stroke-width="3.5"/>
+            <path d="M135,54 Q146,50 160,48" fill="none" stroke="#a88a5e" stroke-width="2" opacity="0.7"/>
+            <path d="M138,45 Q149,40 164,37" fill="none" stroke="#a88a5e" stroke-width="2" opacity="0.7"/>
+          </g>
+
+          <!-- body -->
+          <path d="M56,124 C52,98 84,92 112,98 C140,104 152,130 144,152 C138,170 118,174 96,174 C70,174 58,154 56,124 Z" fill="#2e2e3b" stroke="#0d0b14" stroke-width="4"/>
+          <path d="M60,114 C64,102 78,97 92,96" fill="none" stroke="#5b5b78" stroke-width="3" opacity="0.7"/>
+          <circle cx="120" cy="124" r="5" fill="#484862"/>
+          <circle cx="132" cy="140" r="4" fill="#484862"/>
+          <circle cx="114" cy="150" r="3.5" fill="#484862"/>
+          <circle cx="128" cy="114" r="3" fill="#484862"/>
+          <!-- belly with stripes -->
+          <path d="M62,128 C64,112 90,108 100,122 C108,136 104,160 92,168 C76,172 62,158 62,128 Z" fill="#e6d8bd"/>
+          <path d="M70,128 Q82,132 96,128" fill="none" stroke="#a88a5e" stroke-width="2" opacity="0.55"/>
+          <path d="M68,136 Q82,141 100,136" fill="none" stroke="#a88a5e" stroke-width="2" opacity="0.55"/>
+          <path d="M67,144 Q82,149 101,144" fill="none" stroke="#a88a5e" stroke-width="2" opacity="0.55"/>
+          <path d="M67,152 Q82,157 100,152" fill="none" stroke="#a88a5e" stroke-width="2" opacity="0.55"/>
+          <path d="M69,160 Q82,165 96,160" fill="none" stroke="#a88a5e" stroke-width="2" opacity="0.55"/>
+
+          <!-- feet -->
+          <ellipse cx="74" cy="174" rx="18" ry="9" fill="#2e2e3b" stroke="#0d0b14" stroke-width="4"/>
+          <ellipse cx="124" cy="170" rx="20" ry="10" fill="#2e2e3b" stroke="#0d0b14" stroke-width="4"/>
+          <circle cx="58" cy="174" r="2.5" fill="#e6d8bd"/><circle cx="64" cy="178" r="2.5" fill="#e6d8bd"/><circle cx="72" cy="180" r="2.5" fill="#e6d8bd"/>
+          <circle cx="107" cy="170" r="2.5" fill="#e6d8bd"/><circle cx="113" cy="175" r="2.5" fill="#e6d8bd"/><circle cx="122" cy="178" r="2.5" fill="#e6d8bd"/>
+
+          <!-- little arm -->
+          <path d="M88,126 C80,134 80,146 90,150 C100,150 102,140 98,130 Z" fill="#2e2e3b" stroke="#0d0b14" stroke-width="3.5"/>
+          <circle cx="86" cy="147" r="1.8" fill="#e6d8bd"/><circle cx="91" cy="149" r="1.8" fill="#e6d8bd"/><circle cx="96" cy="147" r="1.8" fill="#e6d8bd"/>
+
+          <!-- head: smooth rounded shape, cream muzzle area kept inside the outline -->
+          <path d="M34,100 C28,88 36,72 52,58 C68,44 92,38 112,42 C140,48 158,72 152,100 C148,120 124,134 96,134 C70,134 44,126 34,100 Z" fill="#2e2e3b"/>
+          <path d="M26,94 C40,90 56,94 66,102 C78,110 86,124 82,140 L26,140 Z" fill="#e6d8bd" clip-path="url(#headclip)"/>
+          <path d="M34,100 C28,88 36,72 52,58 C68,44 92,38 112,42 C140,48 158,72 152,100 C148,120 124,134 96,134 C70,134 44,126 34,100 Z" fill="none" stroke="#0d0b14" stroke-width="4"/>
+          <path d="M44,76 C50,60 70,48 92,43" fill="none" stroke="#5b5b78" stroke-width="3" opacity="0.7"/>
+          <ellipse cx="72" cy="52" rx="6" ry="4" fill="#484862"/>
+          <ellipse cx="92" cy="46" rx="5" ry="3.5" fill="#484862"/>
+          <ellipse cx="112" cy="50" rx="7" ry="4.5" fill="#484862"/>
+          <ellipse cx="130" cy="60" rx="5" ry="3.5" fill="#484862"/>
+          <ellipse cx="141" cy="82" rx="4" ry="3" fill="#484862"/>
+          <ellipse cx="56" cy="64" rx="3.5" ry="2.5" fill="#484862"/>
+          <ellipse cx="142" cy="70" rx="3" ry="2.2" fill="#484862"/>
+
+          <!-- cheeks, nostril -->
+          <ellipse cx="45" cy="113" rx="6" ry="3.6" fill="#ff6f8f" opacity="0.6"/>
+          <ellipse cx="120" cy="108" rx="9" ry="5" fill="#ff6f8f" opacity="0.55"/>
+          <ellipse cx="40" cy="104" rx="2.4" ry="1.9" fill="#0d0b14"/>
+
+          <!-- eyes: far eye (left) narrower, near eye (right) wider -->
+          <g class="eyes-normal">
+            <g class="eye">
+              <ellipse cx="60" cy="86" rx="14.5" ry="21" fill="#6b6b8a" stroke="#0d0b14" stroke-width="3"/>
+              <ellipse cx="60" cy="86" rx="12.3" ry="18.8" fill="#07050b"/>
+              <circle cx="55" cy="77" r="5.5" fill="#ffffff"/>
+              <circle cx="65" cy="95" r="2.6" fill="#ffffff"/>
+            </g>
+            <g class="eye">
+              <ellipse cx="106" cy="82" rx="19" ry="22.5" fill="#6b6b8a" stroke="#0d0b14" stroke-width="3"/>
+              <ellipse cx="106" cy="82" rx="16.6" ry="20.1" fill="#07050b"/>
+              <circle cx="100" cy="73" r="6.5" fill="#ffffff"/>
+              <circle cx="113" cy="92" r="3" fill="#ffffff"/>
+            </g>
+          </g>
+          <g class="eyes-happy">
+            <path d="M46,90 Q60,72 74,90" fill="none" stroke="#f0e6cf" stroke-width="5"/>
+            <path d="M88,88 Q106,66 124,88" fill="none" stroke="#f0e6cf" stroke-width="5"/>
+          </g>
+          <g class="eyes-sleep">
+            <path d="M46,88 Q60,95 74,88" fill="none" stroke="#f0e6cf" stroke-width="4"/>
+            <path d="M88,86 Q106,94 124,86" fill="none" stroke="#f0e6cf" stroke-width="4"/>
+          </g>
+
+          <!-- mouths: on the cream area, small -->
+          <path class="mouth-smile" d="M57,112 Q64,119 71,112" fill="none" stroke="#0d0b14" stroke-width="2.6"/>
+          <circle class="mouth-o" cx="64" cy="116" r="3.6" fill="none" stroke="#0d0b14" stroke-width="2.6"/>
+          <path class="mouth-flat" d="M57,117 Q64,113 71,117" fill="none" stroke="#0d0b14" stroke-width="2.6"/>
+          <path class="mouth-open" d="M57,111 Q64,127 71,111 Z" fill="#c93a55" stroke="#0d0b14" stroke-width="2.6"/>
+          <path class="mouth-sleep" d="M58,116 L70,116" fill="none" stroke="#0d0b14" stroke-width="2.6"/>
+        </svg>
+        <div class="puff"><span></span><span></span></div>
+      </div>
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>
