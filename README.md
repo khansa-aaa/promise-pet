@@ -80,6 +80,8 @@ The tray / menu bar icon lets you hide or show the dragon, open promises, reset 
 
 ## If something doesn't work
 
+If `npm start` says "Electron failed to install correctly" (this happened with Node.js 26 before version 1.3.1), update to the latest version, delete the `node_modules` folder and run `npm install` again.
+
 Run `npm start` from a terminal and look for red error text. You can also open the tray menu, choose "Developer tools (debug)", and check the Console tab.
 
 Your data is saved locally in a small `promises.json` in the app's user-data folder (daily promises are kept for 60 days; backlog, schedule and flashcards are kept until you delete them).

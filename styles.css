@@ -75,9 +75,9 @@ html, body {
 #carry { width: 100%; margin-bottom: 8px; background: #fff; }
 
 /* ---------- dragon ---------- */
-#pet-wrap { position: relative; width: 170px; height: 164px; cursor: pointer; flex: none; }
+#pet-wrap { position: relative; width: 138px; height: 132px; cursor: pointer; flex: none; }
 #pet-wrap:active { cursor: grabbing; }
-#pet { position: absolute; left: 5px; top: 6px; width: 160px; height: 152px; transform-origin: 50% 100%; animation: bob 2.4s ease-in-out infinite; }
+#pet { position: absolute; left: 5px; top: 6px; width: 128px; height: 122px; transform-origin: 50% 100%; animation: bob 2.4s ease-in-out infinite; }
 .dragon { display: block; overflow: visible; }
 
 /* animated parts (SVG origins are in the drawing's own units) */
@@ -112,7 +112,7 @@ html, body {
 .hop { animation: hop .7s ease-out 1 !important; }
 .dance { animation: dance .5s ease-in-out 5 !important; }
 
-.puff { display: none; position: absolute; left: 12px; top: 74px; z-index: 4; }
+.puff { display: none; position: absolute; left: 10px; top: 59px; z-index: 4; }
 .puff span { position: absolute; left: 0; top: 0; width: 9px; height: 9px; border-radius: 50%; background: #fff; border: 2px solid var(--ink); opacity: 0; animation: rise 1.2s ease-out infinite; }
 .puff span + span { left: -6px; animation-delay: .5s; }
 
@@ -132,7 +132,7 @@ html, body {
   background: var(--accent); border: 2px solid var(--ink); border-radius: 12px; color: var(--ink);
   font-size: 12px; font-weight: 800; display: grid; place-items: center; z-index: 5;
 }
-#zzz { position: absolute; left: 24px; top: 14px; font-weight: 800; font-size: 14px; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; opacity: .8; animation: float 2.4s ease-in-out infinite; z-index: 5; }
+#zzz { position: absolute; left: 19px; top: 11px; font-weight: 800; font-size: 14px; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; opacity: .8; animation: float 2.4s ease-in-out infinite; z-index: 5; }
 @keyframes float { 0% { transform: translateY(6px); opacity: 0; } 50% { opacity: .9; } 100% { transform: translateY(-10px); opacity: 0; } }
 
 /* confetti */

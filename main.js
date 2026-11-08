@@ -6,8 +6,8 @@ const SRS = require('./srs');
 const ai = require('./ai');
 
 // Collapsed window = just the pet. The renderer asks for a bigger size when the bubble opens.
-const COLLAPSED_W = 186;
-const COLLAPSED_H = 176;
+const COLLAPSED_W = 154;
+const COLLAPSED_H = 144;
 const HIDE_MS = 30 * 60 * 1000; // right-click "Hide" brings the pet back after this long
 
 let win = null;
